@@ -9,7 +9,8 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.tokofafa.produk.AddProductScreen
 import com.example.tokofafa.produk.ProductListScreen
-
+import com.example.tokofafa.inventori.InventoriScreen
+import com.example.tokofafa.kasir.KasirScreen
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -34,6 +35,12 @@ class MainActivity : ComponentActivity() {
                     }
                     composable("product_list") {
                         ProductListScreen(navController = navController)
+                    }
+                    composable("inventori") {
+                        InventoriScreen(navController = navController)
+                    }
+                    composable("kasir") {
+                        KasirScreen(navController = navController)
                     }
                     composable(
                         "add_product/{productId}",

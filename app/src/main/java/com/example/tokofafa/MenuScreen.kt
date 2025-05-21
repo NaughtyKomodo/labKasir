@@ -56,7 +56,7 @@ fun MenuScreen(navController: NavController) {
                 iconUrl = "https://cdn-icons-png.flaticon.com/512/3082/3082383.png",
                 title = "Inventori",
                 subtitle = "Mengelola persediaan",
-                onClick = { /* To be implemented */ }
+                onClick = {navController.navigate("inventori")}
             )
 
             // Kasir
