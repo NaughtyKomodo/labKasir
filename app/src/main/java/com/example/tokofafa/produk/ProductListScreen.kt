@@ -1,33 +1,102 @@
 package com.example.tokofafa.produk
 
+import android.util.Log
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.LiveData
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.liveData
+import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
+import com.example.tokofafa.R
+import com.example.tokofafa.database.AppDatabase
+import com.example.tokofafa.entities.Product
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import java.io.File
 import java.text.NumberFormat
 import java.util.Locale
+import com.example.tokofafa.dao.ProductWithSupplier
+
+
+
+class ProductViewModel(private val db: AppDatabase) : ViewModel() {
+    val products: LiveData<List<ProductWithSupplier>> = liveData(Dispatchers.IO) {
+        emitSource(db.productDao().getAllProductsWithSupplier())
+    }
+
+    fun addProduct(product: Product) {
+        viewModelScope.launch(Dispatchers.IO) {
+            db.productDao().insert(product)
+        }
+    }
+
+    fun updateProduct(product: Product) {
+        viewModelScope.launch(Dispatchers.IO) {
+            db.productDao().update(product)
+        }
+    }
+
+    fun deleteProduct(id: Long) {
+        viewModelScope.launch(Dispatchers.IO) {
+            db.productDao().delete(id)
+        }
+    }
+
+    suspend fun getProductById(id: Long): Product? {
+        return db.productDao().getProductById(id)
+    }
+
+    fun incrementStock(id: Long) {
+        viewModelScope.launch(Dispatchers.IO) {
+            db.productDao().incrementStock(id)
+        }
+    }
+}
+
+class ProductViewModelFactory(private val db: AppDatabase) : ViewModelProvider.Factory {
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        if (modelClass.isAssignableFrom(ProductViewModel::class.java)) {
+            @Suppress("UNCHECKED_CAST")
+            return ProductViewModel(db) as T
+        }
+        throw IllegalArgumentException("Unknown ViewModel class")
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProductListScreen(navController: NavController) {
+fun ProductListScreen(
+    navController: NavController,
+    viewModel: ProductViewModel = viewModel(
+        factory = ProductViewModelFactory(AppDatabase.getDatabase(LocalContext.current))
+    )
+) {
     val context = LocalContext.current
-    val localStorage = remember { LocalStorage(context) }
-    val products by remember { mutableStateOf(localStorage.getProducts()) }
+    val products by viewModel.products.observeAsState(initial = emptyList())
     var showFilterDropdown by remember { mutableStateOf(false) }
     var selectedFilter by remember { mutableStateOf("Semua") }
-    var showMenu by remember { mutableStateOf(false) }
+    var showMenu by remember { mutableStateOf<Long?>(null) }
+
+    LaunchedEffect(products) {
+        Log.d("TokoFafa", "Product list updated, size: ${products.size}")
+    }
 
     Scaffold(
         topBar = {
@@ -36,33 +105,39 @@ fun ProductListScreen(navController: NavController) {
                 navigationIcon = {
                     IconButton(onClick = { navController.navigateUp() }) {
                         AsyncImage(
-                            model = "https://cdn-icons-png.flaticon.com/512/271/271220.png", // Back arrow icon
+                            model = "https://cdn-icons-png.flaticon.com/512/271/271220.png",
                             contentDescription = "Back",
-                            modifier = Modifier.size(24.dp)
+                            modifier = Modifier.size(24.dp),
+                            placeholder = painterResource(R.drawable.ic_placeholder),
+                            error = painterResource(R.drawable.ic_error)
                         )
                     }
                 },
                 actions = {
                     IconButton(onClick = { /* Handle search */ }) {
                         AsyncImage(
-                            model = "https://cdn-icons-png.flaticon.com/512/954/954591.png", // Search icon
+                            model = "https://cdn-icons-png.flaticon.com/512/954/954591.png",
                             contentDescription = "Search",
-                            modifier = Modifier.size(24.dp)
+                            modifier = Modifier.size(24.dp),
+                            placeholder = painterResource(R.drawable.ic_placeholder),
+                            error = painterResource(R.drawable.ic_error)
                         )
                     }
-                    IconButton(onClick = { showMenu = true }) {
+                    IconButton(onClick = { showMenu = if (showMenu == null) 0 else null }) {
                         AsyncImage(
-                            model = "https://cdn-icons-png.flaticon.com/512/2089/2089627.png", // More icon
+                            model = "https://cdn-icons-png.flaticon.com/512/2089/2089627.png",
                             contentDescription = "More",
-                            modifier = Modifier.size(24.dp)
+                            modifier = Modifier.size(24.dp),
+                            placeholder = painterResource(R.drawable.ic_placeholder),
+                            error = painterResource(R.drawable.ic_error)
                         )
                     }
                     DropdownMenu(
-                        expanded = showMenu,
-                        onDismissRequest = { showMenu = false }
+                        expanded = showMenu != null,
+                        onDismissRequest = { showMenu = null }
                     ) {
                         DropdownMenuItem(
-                            text = { Text("CSV") },
+                            text = { Text("Export CSV") },
                             onClick = { /* Handle CSV export */ }
                         )
                     }
@@ -80,9 +155,11 @@ fun ProductListScreen(navController: NavController) {
                 contentColor = Color.White
             ) {
                 AsyncImage(
-                    model = "https://cdn-icons-png.flaticon.com/512/992/992651.png", // Add icon
+                    model = "https://cdn-icons-png.flaticon.com/512/992/992651.png",
                     contentDescription = "Add Product",
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(24.dp),
+                    placeholder = painterResource(R.drawable.ic_placeholder),
+                    error = painterResource(R.drawable.ic_error)
                 )
             }
         },
@@ -93,7 +170,6 @@ fun ProductListScreen(navController: NavController) {
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // Filter Dropdown
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -106,9 +182,11 @@ fun ProductListScreen(navController: NavController) {
                     Text(selectedFilter)
                     Spacer(modifier = Modifier.width(8.dp))
                     AsyncImage(
-                        model = "https://cdn-icons-png.flaticon.com/512/2985/2985150.png", // Dropdown arrow icon
+                        model = "https://cdn-icons-png.flaticon.com/512/2985/2985150.png",
                         contentDescription = "Dropdown",
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(24.dp),
+                        placeholder = painterResource(R.drawable.ic_placeholder),
+                        error = painterResource(R.drawable.ic_error)
                     )
                 }
                 DropdownMenu(
@@ -122,25 +200,16 @@ fun ProductListScreen(navController: NavController) {
                             showFilterDropdown = false
                         }
                     )
-                    // Add more filter options if needed
                 }
             }
 
-            // Product List
             LazyColumn {
-                items(products) { product ->
+                items(products) { productWithSupplier ->
                     ProductItem(
-                        product = product,
-                        onAddStock = {
-                            val updatedProduct = product.copy(stock = product.stock + 1)
-                            localStorage.updateProduct(updatedProduct)
-                        },
-                        onEdit = {
-                            navController.navigate("add_product/${product.id}")
-                        },
-                        onDelete = {
-                            localStorage.deleteProduct(product.id)
-                        }
+                        productWithSupplier = productWithSupplier,
+                        onAddStock = { viewModel.incrementStock(productWithSupplier.product.id) },
+                        onEdit = { navController.navigate("add_product/${productWithSupplier.product.id}") },
+                        onDelete = { viewModel.deleteProduct(productWithSupplier.product.id) }
                     )
                 }
             }
@@ -150,12 +219,13 @@ fun ProductListScreen(navController: NavController) {
 
 @Composable
 fun ProductItem(
-    product: Product,
+    productWithSupplier: ProductWithSupplier,
     onAddStock: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
+    val product = productWithSupplier.product
 
     Row(
         modifier = Modifier
@@ -164,46 +234,57 @@ fun ProductItem(
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Product Photo or Placeholder
-        if (product.photoUri != null) {
+        if (product.photoUri != null && File(product.photoUri).exists()) {
             AsyncImage(
                 model = product.photoUri,
                 contentDescription = "Product Photo",
                 modifier = Modifier
                     .size(50.dp)
-                    .padding(end = 16.dp)
+                    .padding(end = 16.dp),
+                placeholder = painterResource(R.drawable.ic_placeholder),
+                error = painterResource(R.drawable.ic_error)
             )
         } else {
             AsyncImage(
-                model = "https://cdn-icons-png.flaticon.com/512/679/679922.png", // Placeholder icon
+                model = "https://cdn-icons-png.flaticon.com/512/679/679922.png",
                 contentDescription = "Product Placeholder",
                 modifier = Modifier
                     .size(50.dp)
-                    .padding(end = 16.dp)
+                    .padding(end = 16.dp),
+                placeholder = painterResource(R.drawable.ic_placeholder),
+                error = painterResource(R.drawable.ic_error)
             )
+            Log.d("TokoFafa", "Product photo does not exist: ${product.photoUri}")
         }
 
         Column(
             modifier = Modifier.weight(1f)
         ) {
             Text(
-                text = product.name,
+                text = product.name ?: "Unknown",
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
             )
             Text(
-                text = "Minuman",
+                text = "barang",
                 fontSize = 14.sp,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
             )
             Text(
-                text = "Rp ${NumberFormat.getNumberInstance(Locale("id", "ID")).format(product.sellingPrice)}",
+                text = "Supplier: ${productWithSupplier.supplierName ?: "Tidak ada"}",
+                fontSize = 14.sp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+            )
+            Text(
+                text = "Rp ${
+                    NumberFormat.getNumberInstance(Locale("id", "ID")).format(product.sellingPrice)
+                }",
                 fontSize = 14.sp,
                 color = MaterialTheme.colorScheme.onSurface
             )
             Text(
-                text = "Tambah Stok ${product.stock}",
+                text = "Stok: ${product.stock}",
                 fontSize = 14.sp,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
             )
@@ -212,9 +293,11 @@ fun ProductItem(
         Box {
             IconButton(onClick = { showMenu = true }) {
                 AsyncImage(
-                    model = "https://cdn-icons-png.flaticon.com/512/2089/2089627.png", // More icon
+                    model = "https://cdn-icons-png.flaticon.com/512/2089/2089627.png",
                     contentDescription = "More",
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(24.dp),
+                    placeholder = painterResource(R.drawable.ic_placeholder),
+                    error = painterResource(R.drawable.ic_error)
                 )
             }
             DropdownMenu(
