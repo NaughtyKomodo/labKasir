@@ -336,41 +336,67 @@ fun KasirScreen(navController: NavController) {
             Button(
                 onClick = {
                     if (cartItems.isNotEmpty()) {
-                        val total = cartItems.sumOf { it.unitPrice * it.quantity }
-                        val receipt = buildString {
-                            appendLine("=== STRUK PEMBELIAN ===")
-                            appendLine("TOKO")
-                            appendLine("${SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.getDefault()).format(Date())}")
-                            appendLine("================================")
-                            cartItems.forEach { item ->
-                                appendLine("${item.name}")
-                                appendLine("${item.barcode}")
-                                appendLine("${item.quantity} x Rp ${NumberFormat.getNumberInstance(Locale("id", "ID")).format(item.unitPrice)} = Rp ${NumberFormat.getNumberInstance(Locale("id", "ID")).format(item.unitPrice * item.quantity)}")
-                                appendLine("--------------------------------")
-                            }
-                            appendLine("TOTAL: Rp ${NumberFormat.getNumberInstance(Locale("id", "ID")).format(total)}")
-                            appendLine("================================")
-                            appendLine("Terima kasih atas kunjungan Anda!")
-                        }
-                        receiptText = receipt
-                        showReceiptDialog = true
-
-                        // Save transactions
                         coroutineScope.launch(Dispatchers.IO) {
-                            cartItems.forEach { item ->
-                                db.transactionDao().insert(
-                                    Transaction(
-                                        barcode = item.barcode,
-                                        productName = item.name,
-                                        quantity = item.quantity,
-                                        unitPrice = item.unitPrice,
-                                        totalPrice = item.unitPrice * item.quantity,
-                                        timestamp = System.currentTimeMillis()
-                                    )
-                                )
+                            var isStockSufficient = true
+                            val insufficientItems = mutableListOf<String>()
+
+                            // Check stock for each item
+                            for (item in cartItems) {
+                                val product = db.productDao().getProductByBarcode(item.barcode)
+                                if (product == null || product.stock < item.quantity) {
+                                    isStockSufficient = false
+                                    insufficientItems.add(item.name)
+                                }
                             }
+
                             withContext(Dispatchers.Main) {
-                                // Don't clear cart here, clear after dialog is dismissed
+                                if (!isStockSufficient) {
+                                    Toast.makeText(
+                                        context,
+                                        "Stok tidak cukup untuk: ${insufficientItems.joinToString()}",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                    return@withContext
+                                }
+
+                                // Generate receipt
+                                val total = cartItems.sumOf { it.unitPrice * it.quantity }
+                                val receipt = buildString {
+                                    appendLine("=== STRUK PEMBELIAN ===")
+                                    appendLine("TOKO MAKMUR")
+                                    appendLine("${SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.getDefault()).format(Date())}")
+                                    appendLine("================================")
+                                    cartItems.forEach { item ->
+                                        appendLine("${item.name}")
+                                        appendLine("${item.barcode}")
+                                        appendLine("${item.quantity} x Rp ${NumberFormat.getNumberInstance(Locale("id", "ID")).format(item.unitPrice)} = Rp ${NumberFormat.getNumberInstance(Locale("id", "ID")).format(item.unitPrice * item.quantity)}")
+                                        appendLine("--------------------------------")
+                                    }
+                                    appendLine("TOTAL: Rp ${NumberFormat.getNumberInstance(Locale("id", "ID")).format(total)}")
+                                    appendLine("================================")
+                                    appendLine("Terima kasih atas kunjungan Anda!")
+                                }
+                                receiptText = receipt
+                                showReceiptDialog = true
+                            }
+
+                            // Save transactions and update stock
+                            if (isStockSufficient) {
+                                cartItems.forEach { item ->
+                                    // Insert transaction
+                                    db.transactionDao().insert(
+                                        Transaction(
+                                            barcode = item.barcode,
+                                            productName = item.name,
+                                            quantity = item.quantity,
+                                            unitPrice = item.unitPrice,
+                                            totalPrice = item.unitPrice * item.quantity,
+                                            timestamp = System.currentTimeMillis()
+                                        )
+                                    )
+                                    // Decrease stock
+                                    db.productDao().decreaseStock(item.barcode, item.quantity)
+                                }
                             }
                         }
                     } else {
@@ -705,7 +731,6 @@ fun ModernReceiptDialog(
                             brush = SolidColor(Color.Transparent),
                             width = 1.dp
                         )
-
                     ) {
                         Text("Tutup")
                     }
@@ -827,7 +852,7 @@ fun createReceiptBitmap(receiptText: String, cartItems: List<CartItem>): Bitmap 
     var totalHeight = padding.toFloat() // Start with top padding
 
     // Header height
-    totalHeight += 60f // "TOKO FAFA"
+    totalHeight += 60f // "TOKO MAKMUR"
     totalHeight += 50f // Address
     totalHeight += 40f // Phone
     totalHeight += 60f // Date

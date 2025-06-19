@@ -139,15 +139,6 @@ fun ProductListScreen(
                         }
                     },
                     actions = {
-                        IconButton(onClick = { /* Handle search */ }) {
-                            AsyncImage(
-                                model = "https://cdn-icons-png.flaticon.com/512/954/954591.png",
-                                contentDescription = "Search",
-                                modifier = Modifier.size(24.dp),
-                                placeholder = painterResource(R.drawable.ic_placeholder),
-                                error = painterResource(R.drawable.ic_error)
-                            )
-                        }
                         IconButton(onClick = { showMenu = if (showMenu == null) 0 else null }) {
                             Image(
                                 painter = painterResource(id = R.drawable.excel),

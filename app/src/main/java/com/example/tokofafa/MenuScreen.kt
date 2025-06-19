@@ -92,24 +92,6 @@ fun MenuScreen(navController: NavController) {
                 subtitle = "Melakukan penjualan produk dan kasir",
                 onClick = { navController.navigate("kasir") }
             )
-            MenuItem(
-                iconUrl = "https://cdn-icons-png.flaticon.com/512/2231/2231610.png",
-                title = "Laporan",
-                subtitle = "Melihat laporan penjualan dan keuangan",
-                onClick = { /* To be implemented */ }
-            )
-            MenuItem(
-                iconUrl = "https://cdn-icons-png.flaticon.com/512/126/126794.png",
-                title = "Pengaturan",
-                subtitle = "Melakukan Pengaturan",
-                onClick = { /* To be implemented */ }
-            )
-            MenuItem(
-                iconUrl = "https://cdn-icons-png.flaticon.com/512/2331/2331970.png",
-                title = "Profil Toko",
-                subtitle = "Mengelola informasi toko",
-                onClick = { /* To be implemented */ }
-            )
         }
     }
 }

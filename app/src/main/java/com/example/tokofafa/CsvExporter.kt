@@ -5,7 +5,7 @@ import com.example.tokofafa.entities.Supplier
 import java.io.File
 import java.io.FileWriter
 
-object svExporter {
+object CsvExporter {
     fun exportToCsv(suppliers: List<Supplier>): String {
         val header = "ID,Nama,Email,Telepon,Alamat,Kota,Provinsi,Kode Pos\n"
         val data = suppliers.joinToString("\n") { supplier ->

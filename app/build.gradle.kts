@@ -64,6 +64,7 @@ dependencies {
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     implementation(libs.androidx.constraintlayout)
+    implementation(libs.androidx.media3.exoplayer)
     kapt(libs.androidx.room.compiler)
     implementation(libs.androidx.lifecycle.livedata.ktx)
 

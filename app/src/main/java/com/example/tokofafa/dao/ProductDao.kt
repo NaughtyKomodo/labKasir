@@ -14,6 +14,9 @@ interface ProductDao {
     @Query("SELECT * FROM product")
     fun getAll(): LiveData<List<Product>>
 
+    @Query("UPDATE product SET stock = stock - :quantity WHERE barcode = :barcode")
+    fun decreaseStock(barcode: String, quantity: Int)
+
     @Query("SELECT * FROM product WHERE id = :id")
     suspend fun getProductById(id: Long): Product?
 
@@ -38,4 +41,5 @@ interface ProductDao {
         LEFT JOIN suppliers ON product.supplierId = suppliers.id
     """)
     fun getAllProductsWithSupplier(): LiveData<List<ProductWithSupplier>>
+
 }

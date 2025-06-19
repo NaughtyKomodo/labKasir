@@ -1,7 +1,14 @@
 package com.example.tokofafa.supplier
 
-import android.content.Intent
+import android.content.ContentValues
+import android.content.Context
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -19,8 +26,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.content.FileProvider
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.example.tokofafa.R
@@ -30,6 +35,11 @@ import com.example.tokofafa.SupplierViewModelFactory
 import com.example.tokofafa.database.AppDatabase
 import com.example.tokofafa.entities.Supplier
 import com.example.tokofafa.ui.theme.*
+import java.io.File
+import java.io.FileOutputStream
+import java.text.SimpleDateFormat
+import java.util.Locale
+import androidx.lifecycle.viewmodel.compose.viewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,7 +54,18 @@ fun SupplierScreen(
     var dropdownExpandedId by remember { mutableStateOf<Int?>(null) }
     var searchText by rememberSaveable { mutableStateOf("") }
     var isSearchActive by rememberSaveable { mutableStateOf(false) }
-    var exportCsvTrigger by remember { mutableStateOf(false) }
+    var showMenu by remember { mutableStateOf<Long?>(null) }
+
+    // Storage permission launcher for CSV export
+    val storagePermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            exportToCsv(context, supplierList)
+        } else {
+            Toast.makeText(context, "Izin penyimpanan ditolak", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
@@ -126,6 +147,29 @@ fun SupplierScreen(
                                 Icon(Icons.Default.Close, contentDescription = "Close", tint = AccentText)
                             }
                         }
+                        IconButton(onClick = { showMenu = if (showMenu == null) 0 else null }) {
+                            Image(
+                                painter = painterResource(id = R.drawable.excel),
+                                contentDescription = "More",
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = showMenu != null,
+                            onDismissRequest = { showMenu = null }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Export CSV") },
+                                onClick = {
+                                    showMenu = null
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                        exportToCsv(context, supplierList)
+                                    } else {
+                                        storagePermissionLauncher.launch(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                                    }
+                                }
+                            )
+                        }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = PrimaryBlue,
@@ -197,26 +241,6 @@ fun SupplierScreen(
         }
     }
 
-    if (exportCsvTrigger) {
-        LaunchedEffect(exportCsvTrigger) {
-            viewModel.exportToCsv(context) { file ->
-                Toast.makeText(context, "CSV disimpan di:\n${file.name}", Toast.LENGTH_SHORT).show()
-                val uri = FileProvider.getUriForFile(
-                    context,
-                    "${context.packageName}.provider",
-                    file
-                )
-                val intent = Intent(Intent.ACTION_SEND).apply {
-                    type = "text/csv"
-                    putExtra(Intent.EXTRA_STREAM, uri)
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
-                context.startActivity(Intent.createChooser(intent, "Bagikan file CSV ke:"))
-                exportCsvTrigger = false
-            }
-        }
-    }
-
     if (showForm) {
         SupplierFormDialog(
             isEditing = editingSupplier != null,
@@ -258,5 +282,64 @@ fun SupplierScreen(
                 showForm = false
             }
         )
+    }
+}
+
+fun exportToCsv(context: Context, suppliers: List<Supplier>) {
+    try {
+        // Generate CSV content
+        val csvContent = StringBuilder()
+        // CSV Header
+        csvContent.append("ID,Name,Email,Phone,Address,City,Province,PostalCode\n")
+
+        // CSV Rows
+        suppliers.forEach { supplier ->
+            val id = supplier.id.toString()
+            val name = supplier.name.replace(",", "") ?: "-"
+            val email = supplier.email?.replace(",", "") ?: "-"
+            val phone = supplier.phone?.replace(",", "") ?: "-"
+            val address = supplier.address?.replace(",", "") ?: "-"
+            val city = supplier.city?.replace(",", "") ?: "-"
+            val province = supplier.province?.replace(",", "") ?: "-"
+            val postalCode = supplier.postalCode?.replace(",", "") ?: "-"
+
+            csvContent.append("$id,$name,$email,$phone,$address,$city,$province,$postalCode\n")
+        }
+
+        // Generate filename with timestamp
+        val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(java.util.Date())
+        val filename = "suppliers_$timestamp.csv"
+
+        // Save to storage
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val contentValues = ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
+                put(MediaStore.MediaColumns.MIME_TYPE, "text/csv")
+                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+            }
+
+            val resolver = context.contentResolver
+            val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+            uri?.let {
+                resolver.openOutputStream(it)?.use { outputStream ->
+                    outputStream.write(csvContent.toString().toByteArray())
+                }
+            }
+        } else {
+            val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            val file = File(downloadsDir, filename)
+            FileOutputStream(file).use { outputStream ->
+                outputStream.write(csvContent.toString().toByteArray())
+            }
+
+            // Notify media scanner
+            val intent = android.content.Intent(android.content.Intent.ACTION_MEDIA_SCANNER_SCAN_FILE)
+            intent.data = android.net.Uri.fromFile(file)
+            context.sendBroadcast(intent)
+        }
+
+        Toast.makeText(context, "CSV berhasil disimpan di Downloads", Toast.LENGTH_SHORT).show()
+    } catch (e: Exception) {
+        Toast.makeText(context, "Gagal mengekspor CSV: ${e.message}", Toast.LENGTH_SHORT).show()
     }
 }
